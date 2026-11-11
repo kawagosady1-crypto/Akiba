@@ -413,6 +413,12 @@ class _LogSheetState extends State<LogSheet> {
 
     switch (_kind) {
       case 'saving':
+        if (_goalId == 'split') {
+          app.addSplitSaving(
+              amount: amt, location: _location, date: _date, note: note);
+          msg = tf('savedMsg', {'a': money(amt)});
+          break;
+        }
         final loans = app.activeLoans(_goalId);
         app.addSaving(
           amount: amt,
@@ -569,6 +575,16 @@ class _LogSheetState extends State<LogSheet> {
         onSelected: (_) => setState(() => _goalId = g.id),
       ));
     }
+    if (!withdraw && app.splitReady) {
+      chips.insert(
+          0,
+          ChoiceChip(
+            avatar: const Icon(Icons.call_split, size: 16),
+            label: Text(t('splitChip')),
+            selected: _goalId == 'split',
+            onSelected: (_) => setState(() => _goalId = 'split'),
+          ));
+    }
     final buf = app.bufferBalance;
     if (!withdraw || buf > 0) {
       chips.add(ChoiceChip(
@@ -643,6 +659,10 @@ class _LogSheetState extends State<LogSheet> {
         onSelectionChanged: (s) => setState(() {
           _kind = s.first;
           _error = null;
+          if (_kind == 'withdraw' && _goalId == 'split') {
+            final goals = app.activeGoals;
+            _goalId = goals.isNotEmpty ? goals.first.id : bufferId;
+          }
         }),
       ),
       const SizedBox(height: 16),

@@ -1,12 +1,17 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -76,9 +81,155 @@ class Reminders {
   }
 
   static Future<void> cancel() async {
+    await cancelId(_id);
+  }
+
+  static Future<void> cancelId(int id) async {
     try {
       await _init();
-      await _plugin.cancel(_id);
+      await _plugin.cancel(id);
+    } catch (_) {}
+  }
+
+  static NotificationDetails _details(String channelId, String channelName) =>
+      NotificationDetails(
+        android: AndroidNotificationDetails(channelId, channelName,
+            importance: Importance.high, priority: Priority.high),
+      );
+
+  static Future<void> _repeat(int id, String title, String body, DateTime first,
+      DateTimeComponents match, String channelId, String channelName) async {
+    await _init();
+    await _plugin.cancel(id);
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(first, tz.UTC),
+      _details(channelId, channelName),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: match,
+    );
+  }
+
+  /// Reminder for a recurring saving plan.
+  static Future<void> schedulePlan(SavePlan p) async {
+    try {
+      final now = DateTime.now();
+      var at = DateTime(now.year, now.month, now.day, p.hour, p.minute);
+      DateTimeComponents match = DateTimeComponents.time;
+      if (p.frequency == 'weekly') {
+        while (at.weekday != p.weekday || !at.isAfter(now)) {
+          at = at.add(const Duration(days: 1));
+        }
+        match = DateTimeComponents.dayOfWeekAndTime;
+      } else if (p.frequency == 'monthly') {
+        at = DateTime(now.year, now.month, p.monthDay, p.hour, p.minute);
+        if (!at.isAfter(now)) {
+          at = DateTime(now.year, now.month + 1, p.monthDay, p.hour, p.minute);
+        }
+        match = DateTimeComponents.dayOfMonthAndTime;
+      } else if (!at.isAfter(now)) {
+        at = at.add(const Duration(days: 1));
+      }
+      final body = tf('planNotif', {
+        'a': money(p.amount),
+        'g': p.goalId == bufferId ? t('buffer') : (app.goalById(p.goalId)?.name ?? ''),
+      });
+      await _repeat(p.notifId, 'Akiba', body, at, match, 'saving_plans',
+          t('plansTitle'));
+    } catch (_) {}
+  }
+
+  /// Reminder two days before a bill is due, every month at 9:00.
+  static Future<void> scheduleBill(Bill b) async {
+    try {
+      final now = DateTime.now();
+      final day = b.dueDay > 2 ? b.dueDay - 2 : b.dueDay;
+      var at = DateTime(now.year, now.month, day, 9, 0);
+      if (!at.isAfter(now)) at = DateTime(now.year, now.month + 1, day, 9, 0);
+      final body = tf('billNotif', {
+        'n': b.name,
+        'a': money(b.amount),
+        'd': '${b.dueDay}',
+      });
+      await _repeat(b.notifId, 'Akiba', body, at,
+          DateTimeComponents.dayOfMonthAndTime, 'bills', t('billsTitle'));
+    } catch (_) {}
+  }
+}
+
+// ======================= Backup file =======================
+
+class BackupFiles {
+  /// Saves the backup as a .json file and opens the share sheet
+  /// (WhatsApp, Google Drive, email...).
+  static Future<bool> share() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final n = DateTime.now();
+      final name =
+          'akiba-backup-${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}.json';
+      final f = File('${dir.path}/$name');
+      await f.writeAsString(app.exportJson());
+      await Share.shareXFiles([XFile(f.path, mimeType: 'application/json')],
+          subject: 'Akiba backup');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Lets the user pick a backup file and returns its text.
+  static Future<String?> pick() async {
+    try {
+      final r = await FilePicker.platform.pickFiles(type: FileType.any);
+      final path = r?.files.single.path;
+      if (path == null) return null;
+      final text = await File(path).readAsString();
+      jsonDecode(text); // throws if it is not a backup
+      return text;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ======================= Home-screen widget =======================
+
+class HomeWidgetSync {
+  static Timer? _timer;
+
+  /// Updates the widget shortly after the data changes.
+  static void schedule() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 800), _update);
+  }
+
+  static Future<void> _update() async {
+    try {
+      final g = app.mainGoal;
+      final balance = app.hideBalance ? '••••••' : 'TZS ${num0(app.totalNetSaved)}';
+      String goalLine = 'Akiba';
+      String todayLine = '';
+      if (g != null) {
+        final pct = (app.moneyFraction(g) * 100).round();
+        goalLine = '${g.name} · $pct%';
+        final s = app.currentStat(g);
+        todayLine = s.met
+            ? t('widgetDone')
+            : tf('widgetLeft', {'a': num0(s.shortfall.ceil())});
+      }
+      await HomeWidget.saveWidgetData<String>('balance', balance);
+      await HomeWidget.saveWidgetData<String>('goal', goalLine);
+      await HomeWidget.saveWidgetData<String>('today', todayLine);
+      await HomeWidget.saveWidgetData<String>('label', t('totalBalance'));
+      await HomeWidget.updateWidget(
+        androidName: 'AkibaWidgetProvider',
+        qualifiedAndroidName: 'com.akiba.akiba.AkibaWidgetProvider',
+      );
     } catch (_) {}
   }
 }
@@ -114,7 +265,9 @@ class Bio {
 // ======================= Goal photo =======================
 
 class Photos {
-  static Future<String?> pickGoalPhoto() async {
+  static Future<String?> pickGoalPhoto() => pickPhoto('goal');
+
+  static Future<String?> pickPhoto(String prefix) async {
     try {
       final x = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -126,7 +279,7 @@ class Photos {
       final dot = x.path.lastIndexOf('.');
       final ext = dot > 0 ? x.path.substring(dot) : '.jpg';
       final dest =
-          '${dir.path}/goal_${DateTime.now().millisecondsSinceEpoch}$ext';
+          '${dir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}$ext';
       await File(x.path).copy(dest);
       return dest;
     } catch (_) {

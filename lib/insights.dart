@@ -6,6 +6,7 @@ import 'format.dart';
 import 'i18n.dart';
 import 'services.dart';
 import 'state.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 // ======================= Insights =======================
@@ -19,6 +20,152 @@ class InsightsScreen extends StatefulWidget {
 
 class _InsightsScreenState extends State<InsightsScreen> {
   bool _busy = false;
+  DateTime _calMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
+  Color _dayColor(String status, ColorScheme cs) => switch (status) {
+        'met' => pal.accent,
+        'saved' => pal.accent.withAlpha(170),
+        'short' => const Color(0xFFEF9F27),
+        'missed' => const Color(0xFFE24B4A).withAlpha(150),
+        'today' => cs.surfaceContainerHighest,
+        'future' => cs.surfaceContainerLow,
+        _ => cs.surfaceContainerHighest,
+      };
+
+  Widget _calendar(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m = _calMonth;
+    final status = app.calendarStatus(m);
+    final first = DateTime(m.year, m.month, 1);
+    final days = DateTime(m.year, m.month + 1, 0).day;
+    final lead = first.weekday - 1; // Monday first
+    final today = dayOnly(DateTime.now());
+    final cells = <Widget>[
+      for (var d = 1; d <= 7; d++)
+        Center(
+            child: Text(weekdayShort(d).substring(0, 1),
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: cs.onSurfaceVariant))),
+      for (var i = 0; i < lead; i++) const SizedBox.shrink(),
+      for (var d = 1; d <= days; d++)
+        Builder(builder: (context) {
+          final day = DateTime(m.year, m.month, d);
+          final st = status[dayKey(day)] ?? 'none';
+          final isToday = sameDay(day, today);
+          final strong = st == 'met' || st == 'saved' || st == 'missed';
+          return GestureDetector(
+            onTap: day.isAfter(today)
+                ? null
+                : () => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                      content: Text(tf('calDay', {
+                    'd': fmtDate(day),
+                    'a': money(app.totalOn('saving', day)),
+                    'b': money(app.totalOn('spending', day)),
+                  })))),
+            child: Container(
+              margin: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: _dayColor(st, cs),
+                borderRadius: BorderRadius.circular(10),
+                border: isToday ? Border.all(color: cs.primary, width: 2) : null,
+              ),
+              alignment: Alignment.center,
+              child: Text('$d',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                      color: strong ? Colors.white : cs.onSurfaceVariant)),
+            ),
+          );
+        }),
+    ];
+    Widget dot(Color c, String l) => Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
+          const SizedBox(width: 4),
+          Text(l, style: theme.textTheme.labelSmall),
+        ]);
+    return SectionCard(
+      title: '${monthLong(m.month)} ${m.year}',
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: () => setState(() => _calMonth = DateTime(m.year, m.month - 1, 1)),
+          icon: const Icon(Icons.chevron_left),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: (m.year == today.year && m.month == today.month)
+              ? null
+              : () => setState(() => _calMonth = DateTime(m.year, m.month + 1, 1)),
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: cells,
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 12, runSpacing: 4, children: [
+            dot(pal.accent, t('calMet')),
+            dot(const Color(0xFFEF9F27), t('calShort')),
+            dot(const Color(0xFFE24B4A).withAlpha(150), t('calMissed')),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _tips(BuildContext context) {
+    final list = app.tips();
+    if (list.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    IconData icon(String k) => switch (k) {
+          'up' => Icons.trending_up,
+          'down' => Icons.trending_down,
+          'star' => Icons.star_outline,
+          'fire' => Icons.local_fire_department_outlined,
+          _ => Icons.pie_chart_outline,
+        };
+    Color color(String k) => switch (k) {
+          'up' => cs.error,
+          'down' => Colors.green.shade700,
+          'fire' => const Color(0xFFD85A30),
+          _ => pal.accent,
+        };
+    return SectionCard(
+      title: t('tipsTitle'),
+      child: Column(
+        children: [
+          for (final tip in list)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                      color: color(tip.icon).withAlpha(35),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon(tip.icon), size: 18, color: color(tip.icon)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(tip.text)),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _bar(double v, double maxV, Color c) {
     final h = maxV <= 0 ? 2.0 : max(2.0, 110 * v / maxV);
@@ -91,8 +238,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final prevMonth = DateTime(today.year, today.month - 1, 1);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
       children: [
+        _calendar(context),
+        _tips(context),
         // This month
         SectionCard(
           title: '${t('thisMonth')} · ${monthLong(today.month)}',

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'screens.dart';
+import 'services.dart';
 import 'settings.dart';
 import 'state.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await app.load();
   appLocked.value = app.hasPin;
+  app.addListener(HomeWidgetSync.schedule);
+  HomeWidgetSync.schedule();
   runApp(const AkibaApp());
 }
 
@@ -19,7 +23,6 @@ class AkibaApp extends StatefulWidget {
 }
 
 class _AkibaAppState extends State<AkibaApp> with WidgetsBindingObserver {
-  static const Color _seed = Color(0xFF0F7B5F);
   DateTime? _pausedAt;
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
@@ -69,16 +72,10 @@ class _AkibaAppState extends State<AkibaApp> with WidgetsBindingObserver {
           navigatorKey: _navKey,
           title: 'Akiba',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorSchemeSeed: _seed,
-            useMaterial3: true,
-            brightness: Brightness.light,
-          ),
-          darkTheme: ThemeData(
-            colorSchemeSeed: _seed,
-            useMaterial3: true,
-            brightness: Brightness.dark,
-          ),
+          theme: buildTheme(app.colorTheme, Brightness.light),
+          darkTheme: buildTheme(app.colorTheme, Brightness.dark,
+              black: app.themeMode == 'black'),
+          themeMode: themeModeFor(app.themeMode),
           home: home,
         );
       },

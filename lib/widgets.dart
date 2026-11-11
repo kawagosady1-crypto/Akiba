@@ -72,10 +72,12 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      color: color,
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: color ?? theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,6 +102,7 @@ class SectionCard extends StatelessWidget {
             child,
           ],
         ),
+      ),
       ),
     );
   }
@@ -270,8 +273,11 @@ class GoalCard extends StatelessWidget {
     final dueText = left >= 0
         ? '$dayOfText · $left ${t('daysLeft')}'
         : t('deadlinePassed');
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -320,6 +326,7 @@ class GoalCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

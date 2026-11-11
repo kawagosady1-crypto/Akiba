@@ -420,6 +420,155 @@ const Map<String, List<String>> _s = {
     'This deletes all goals and entries on this phone. Continue?',
     'Hii itafuta malengo na kumbukumbu zote kwenye simu hii. Endelea?'
   ],
+  // ---- home v3 ----
+  'totalBalance': ['Total balance', 'Jumla ya akiba'],
+  'showBalance': ['Show balance', 'Onyesha salio'],
+  'hideBalance': ['Hide balance', 'Ficha salio'],
+  'byGoal': ['By goal', 'Kwa lengo'],
+  'savedShort': ['saved', 'imewekwa'],
+  'daysShort': ['days', 'siku'],
+  'thisWeekShort': ['This week', 'Wiki hii'],
+  'thisMonthShort': ['This month', 'Mwezi huu'],
+  'otherAmount': ['Other amount', 'Kiasi kingine'],
+  'done': ['Done', 'Imekamilika'],
+  'extraShort': ['extra', 'ziada'],
+  'left': ['left', 'imebaki'],
+  'last7': ['Last 7 days', 'Siku 7 zilizopita'],
+  'ahead': ['Ahead', 'Mbele'],
+  'behindShort': ['Behind', 'Nyuma'],
+  'finish': ['Finish', 'Kumaliza'],
+  'extraShortLabel': ['Extra saved', 'Ziada'],
+  'undo': ['Undo', 'Rudisha'],
+  'streakInfo': [
+    'How many days (or weeks or months) in a row you have hit your target.',
+    'Idadi ya siku (au wiki au miezi) mfululizo uliyofikia lengo lako.'
+  ],
+  'paceInfo': [
+    'Time used: {a}. Money saved: {b}. Keep money ahead of time to finish on schedule.',
+    'Muda uliotumika: {a}. Pesa zilizowekwa: {b}. Weka pesa mbele ya muda ili umalize kwa wakati.'
+  ],
+  'finishInfo': [
+    'At your recent pace you finish on {a}. Your deadline is {b}.',
+    'Kwa kasi yako ya karibuni utamaliza tarehe {a}. Tarehe yako ya mwisho ni {b}.'
+  ],
+  'extraInfo': [
+    'Saved above your targets: {a}. In the emergency buffer: {b}.',
+    'Ulichoweka juu ya malengo: {a}. Kwenye akiba ya dharura: {b}.'
+  ],
+  'requestBanner': ['Withdrawal {a} · {s}', 'Kutoa {a} · {s}'],
+  'readyWord': ['ready', 'tayari'],
+  'waitWord': ['waiting 24h', 'inasubiri saa 24'],
+  'shortBanner': ['Short {a} last period', 'Pungufu {a} kipindi kilichopita'],
+  'oweBanner': ['Owe {a} · {g}', 'Deni {a} · {g}'],
+  'limitBanner': ['{c} at {p}% of limit', '{c} imefika {p}% ya mpaka'],
+  // ---- v4 ----
+  'name': ['Name', 'Jina'],
+  'phone': ['Phone', 'Simu'],
+  'email': ['Email', 'Barua pepe'],
+  'city': ['Town or city', 'Mji'],
+  'motto': ['My saving motto', 'Kauli mbiu yangu'],
+  'myProfile': ['My profile', 'Wasifu wangu'],
+  'profilePrivate': [
+    'Your profile stays on this phone and is included in your backup.',
+    'Wasifu wako unabaki kwenye simu hii na unajumuishwa kwenye nakala.'
+  ],
+  'unsavedAsk': ['You have unsaved changes. Leave without saving?', 'Una mabadiliko ambayo hayajahifadhiwa. Toka bila kuhifadhi?'],
+  'discard': ['Leave', 'Toka'],
+  'settingsSaved': ['Changes saved', 'Mabadiliko yamehifadhiwa'],
+  'appearance': ['Appearance', 'Mwonekano'],
+  'colorTheme': ['Colour', 'Rangi'],
+  'mode_system': ['System', 'Mfumo'],
+  'mode_light': ['Light', 'Mwanga'],
+  'mode_dark': ['Dark', 'Giza'],
+  'mode_black': ['Pure black', 'Nyeusi kabisa'],
+  'color_green': ['Green', 'Kijani'],
+  'color_blue': ['Blue', 'Bluu'],
+  'color_purple': ['Purple', 'Zambarau'],
+  'color_gold': ['Gold', 'Dhahabu'],
+  'color_coral': ['Coral', 'Matumbawe'],
+  'securityNow': [
+    'Security changes apply as soon as you confirm them.',
+    'Mabadiliko ya usalama yanatumika mara unapoyathibitisha.'
+  ],
+  'pinOffAsk': ['Turn off the PIN lock?', 'Zima kufunga kwa PIN?'],
+  'shareBackup': ['Share backup file', 'Tuma faili ya nakala'],
+  'shareBackupSub': [
+    'Save it to Google Drive, WhatsApp or email',
+    'Ihifadhi Google Drive, WhatsApp au barua pepe'
+  ],
+  'restoreFile': ['Restore from backup file', 'Rejesha kutoka faili ya nakala'],
+  'restoreAsk': [
+    'This replaces the data on this phone with the backup. Continue?',
+    'Hii itabadilisha data ya simu hii kwa nakala. Endelea?'
+  ],
+  'backupFailed': ['Could not create the backup file', 'Imeshindwa kutengeneza faili ya nakala'],
+  'wallet': ['Wallet', 'Pochi'],
+  'walletHelp': [
+    'Everyday money: income minus spending and savings, plus withdrawals.',
+    'Pesa za kila siku: mapato toa matumizi na akiba, ongeza ulizotoa.'
+  ],
+  'planTab': ['Plans', 'Mipango'],
+  'edit': ['Edit', 'Hariri'],
+  'splitTitle': ['Auto-split savings', 'Gawanya akiba'],
+  'splitHelp': [
+    'When you choose "Split" while saving, the amount is shared across goals by these percentages.',
+    'Ukichagua "Gawanya" unapoweka akiba, kiasi kinagawanywa kwa malengo kwa asilimia hizi.'
+  ],
+  'splitEmpty': ['Not set up yet', 'Bado haijawekwa'],
+  'splitMust100': ['The total must be exactly 100%', 'Jumla lazima iwe 100% kamili'],
+  'splitChip': ['Split', 'Gawanya'],
+  'plansTitle': ['Recurring savings', 'Akiba za kurudia'],
+  'plansEmpty': ['e.g. save 20,000 every Friday', 'mfano weka 20,000 kila Ijumaa'],
+  'newPlan': ['New recurring saving', 'Akiba mpya ya kurudia'],
+  'editPlan': ['Edit recurring saving', 'Hariri akiba ya kurudia'],
+  'howOften': ['How often', 'Mara ngapi'],
+  'dayOfMonth': ['Day of the month', 'Tarehe ya mwezi'],
+  'planNotif': ['Time to save {a} to {g}', 'Ni wakati wa kuweka {a} kwenye {g}'],
+  'planBanner': ['Plan: save {a} · {g}', 'Mpango: weka {a} · {g}'],
+  'billsTitle': ['Bills', 'Bili'],
+  'billsEmpty': ['Add rent, school fees, LUKU...', 'Ongeza kodi, ada ya shule, LUKU...'],
+  'newBill': ['New bill', 'Bili mpya'],
+  'editBill': ['Edit bill', 'Hariri bili'],
+  'billName': ['Bill name', 'Jina la bili'],
+  'dueEveryMonth': ['Due every month on day', 'Inalipwa kila mwezi tarehe'],
+  'billReminderHelp': [
+    'You get a reminder two days before.',
+    'Utapata kikumbusho siku mbili kabla.'
+  ],
+  'billNotif': ['{n} ({a}) is due on the {d}th', '{n} ({a}) inalipwa tarehe {d}'],
+  'billBanner': ['{n} {a} · {s}', '{n} {a} · {s}'],
+  'markPaid': ['Mark paid', 'Imelipwa'],
+  'paidThisMonth': ['Paid this month', 'Imelipwa mwezi huu'],
+  'overdue': ['Overdue', 'Imechelewa'],
+  'dueInDays': ['Due in {n} days', 'Inalipwa baada ya siku {n}'],
+  'debtsTitle': ['Money owed', 'Madeni'],
+  'debtsEmpty': ['Track who owes you and whom you owe', 'Fuatilia wanaokudai na unaowadai'],
+  'newDebt': ['New record', 'Rekodi mpya'],
+  'owedToMe': ['Owed to me', 'Ninadai'],
+  'iOwe': ['I owe', 'Ninadaiwa'],
+  'person': ['Person', 'Mtu'],
+  'dueOptional': ['Due date (optional)', 'Tarehe ya kulipa (si lazima)'],
+  'recordPayment': ['Record payment', 'Rekodi malipo'],
+  'debtProgress': ['Paid {a} of {b}', 'Imelipwa {a} kati ya {b}'],
+  'settled': ['Settled', 'Imelipwa yote'],
+  'debtBannerIn': ['{p} owes you {a}', '{p} anakudai {a}'],
+  'debtBannerOut': ['You owe {p} {a}', 'Unamdai {p} {a}'],
+  'whatIf': ['What if I save...', 'Je, nikiweka...'],
+  'useAmount': ['Use this amount', 'Tumia kiasi hiki'],
+  'afterDeadline': ['After your deadline', 'Baada ya tarehe yako ya mwisho'],
+  'beforeDeadline': ['On time', 'Kwa wakati'],
+  'calMet': ['Target met', 'Lengo limefikiwa'],
+  'calShort': ['Short', 'Pungufu'],
+  'calMissed': ['Missed', 'Hukuweka'],
+  'calDay': ['{d}: saved {a}, spent {b}', '{d}: umeweka {a}, umetumia {b}'],
+  'tipsTitle': ['Tips for you', 'Ushauri kwako'],
+  'tipCatUp': ['{c} spending is up {p}% this week', 'Matumizi ya {c} yamepanda {p}% wiki hii'],
+  'tipCatDown': ['{c} spending is down {p}% this week. Nice!', 'Matumizi ya {c} yameshuka {p}% wiki hii. Vizuri!'],
+  'tipBestDay': ['You save the most on {d}s', 'Unaweka akiba zaidi siku ya {d}'],
+  'tipRate': ['You have saved {p}% of this month\'s income', 'Umeweka {p}% ya mapato ya mwezi huu'],
+  'tipStreak': ['{n} in a row. Keep the streak going!', 'Mfululizo wa {n}. Endeleza!'],
+  'widgetDone': ['Today done ✓', 'Leo imekamilika ✓'],
+  'widgetLeft': ['{a} left today', '{a} imebaki leo'],
 };
 
 String t(String key) {
@@ -458,5 +607,15 @@ const List<String> _daysSw = ['Jtt', 'Jnn', 'Jtn', 'Alh', 'Iju', 'Jms', 'Jpl'];
 String monthShort(int m) => (currentLang == 'sw' ? _monthsSw : _monthsEn)[m - 1];
 String monthLong(int m) =>
     (currentLang == 'sw' ? _monthsLongSw : _monthsLongEn)[m - 1];
+const List<String> _daysLongEn = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+];
+const List<String> _daysLongSw = [
+  'Jumatatu', 'Jumanne', 'Jumatano', 'Alhamisi', 'Ijumaa', 'Jumamosi', 'Jumapili'
+];
+
+String weekdayLong(int weekday) =>
+    (currentLang == 'sw' ? _daysLongSw : _daysLongEn)[weekday - 1];
+
 String weekdayShort(int weekday) =>
     (currentLang == 'sw' ? _daysSw : _daysEn)[weekday - 1];

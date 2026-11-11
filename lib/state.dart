@@ -331,6 +331,164 @@ class PeriodStat {
   }
 }
 
+class SavePlan {
+  final String id;
+  String goalId;
+  double amount;
+  String frequency; // 'daily', 'weekly', 'monthly'
+  int weekday; // 1 = Monday ... 7 = Sunday
+  int monthDay; // 1..28
+  int hour;
+  int minute;
+  DateTime? lastDone;
+  final int notifId;
+
+  SavePlan({
+    required this.id,
+    required this.goalId,
+    required this.amount,
+    this.frequency = 'weekly',
+    this.weekday = 5,
+    this.monthDay = 1,
+    this.hour = 18,
+    this.minute = 0,
+    this.lastDone,
+    required this.notifId,
+  });
+
+  bool get dueToday {
+    final now = DateTime.now();
+    final due = switch (frequency) {
+      'daily' => true,
+      'monthly' => now.day == monthDay,
+      _ => now.weekday == weekday,
+    };
+    return due && !(lastDone != null && sameDay(lastDone!, now));
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'goalId': goalId,
+        'amount': amount,
+        'frequency': frequency,
+        'weekday': weekday,
+        'monthDay': monthDay,
+        'hour': hour,
+        'minute': minute,
+        'lastDone': lastDone?.toIso8601String(),
+        'notifId': notifId,
+      };
+
+  factory SavePlan.fromJson(Map<String, dynamic> j) => SavePlan(
+        id: j['id'] as String,
+        goalId: j['goalId'] as String,
+        amount: (j['amount'] as num).toDouble(),
+        frequency: (j['frequency'] as String?) ?? 'weekly',
+        weekday: (j['weekday'] as num?)?.toInt() ?? 5,
+        monthDay: (j['monthDay'] as num?)?.toInt() ?? 1,
+        hour: (j['hour'] as num?)?.toInt() ?? 18,
+        minute: (j['minute'] as num?)?.toInt() ?? 0,
+        lastDone: j['lastDone'] == null ? null : DateTime.parse(j['lastDone'] as String),
+        notifId: (j['notifId'] as num?)?.toInt() ?? 2000,
+      );
+}
+
+class Bill {
+  final String id;
+  String name;
+  double amount;
+  int dueDay; // 1..28, every month
+  String lastPaidMonth; // 'YYYY-M' or ''
+  final int notifId;
+
+  Bill({
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.dueDay,
+    this.lastPaidMonth = '',
+    required this.notifId,
+  });
+
+  static String monthKey(DateTime d) => '${d.year}-${d.month}';
+  bool get paidThisMonth => lastPaidMonth == monthKey(DateTime.now());
+  DateTime get dueDate {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, dueDay);
+  }
+
+  /// Days until this month's due date (negative = overdue).
+  int get daysToDue => daysBetween(DateTime.now(), dueDate);
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'amount': amount,
+        'dueDay': dueDay,
+        'lastPaidMonth': lastPaidMonth,
+        'notifId': notifId,
+      };
+
+  factory Bill.fromJson(Map<String, dynamic> j) => Bill(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        amount: (j['amount'] as num).toDouble(),
+        dueDay: (j['dueDay'] as num?)?.toInt() ?? 1,
+        lastPaidMonth: (j['lastPaidMonth'] as String?) ?? '',
+        notifId: (j['notifId'] as num?)?.toInt() ?? 3000,
+      );
+}
+
+class Debt {
+  final String id;
+  String person;
+  String direction; // 'owedToMe' or 'iOwe'
+  double amount;
+  double paid;
+  DateTime? dueDate;
+  String note;
+
+  Debt({
+    required this.id,
+    required this.person,
+    required this.direction,
+    required this.amount,
+    this.paid = 0,
+    this.dueDate,
+    this.note = '',
+  });
+
+  double get remaining => max(0.0, amount - paid);
+  bool get settled => remaining <= 0.5;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'person': person,
+        'direction': direction,
+        'amount': amount,
+        'paid': paid,
+        'dueDate': dueDate?.toIso8601String(),
+        'note': note,
+      };
+
+  factory Debt.fromJson(Map<String, dynamic> j) => Debt(
+        id: j['id'] as String,
+        person: j['person'] as String,
+        direction: (j['direction'] as String?) ?? 'owedToMe',
+        amount: (j['amount'] as num).toDouble(),
+        paid: (j['paid'] as num?)?.toDouble() ?? 0,
+        dueDate: j['dueDate'] == null ? null : DateTime.parse(j['dueDate'] as String),
+        note: (j['note'] as String?) ?? '',
+      );
+}
+
+/// A short insight shown in Stats.
+class Tip {
+  final String icon; // 'up', 'down', 'star', 'fire', 'pie'
+  final String text;
+  Tip(this.icon, this.text);
+}
+
 // ======================= State =======================
 
 class AppState extends ChangeNotifier {
@@ -352,6 +510,22 @@ class AppState extends ChangeNotifier {
   int reminderMinute = 0;
   String pinHash = '';
   bool useBiometric = false;
+  bool hideBalance = false;
+  String lastLocation = '';
+  // profile
+  String profilePhoto = '';
+  String phone = '';
+  String email = '';
+  String city = '';
+  String motto = '';
+  // appearance
+  String themeMode = 'system'; // system, light, dark, black
+  String colorTheme = 'green'; // green, blue, purple, gold, coral
+  // plans
+  Map<String, int> splitPlan = {};
+  List<SavePlan> plans = [];
+  List<Bill> bills = [];
+  List<Debt> debts = [];
 
   bool get hasPin => pinHash.isNotEmpty;
 
@@ -380,6 +554,19 @@ class AppState extends ChangeNotifier {
         'reminderMinute': reminderMinute,
         'pinHash': pinHash,
         'useBiometric': useBiometric,
+        'hideBalance': hideBalance,
+        'lastLocation': lastLocation,
+        'profilePhoto': profilePhoto,
+        'phone': phone,
+        'email': email,
+        'city': city,
+        'motto': motto,
+        'themeMode': themeMode,
+        'colorTheme': colorTheme,
+        'splitPlan': splitPlan,
+        'plans': plans.map((x) => x.toJson()).toList(),
+        'bills': bills.map((x) => x.toJson()).toList(),
+        'debts': debts.map((x) => x.toJson()).toList(),
         'goals': goals.map((g) => g.toJson()).toList(),
         'txns': txns.map((x) => x.toJson()).toList(),
         'requests': requests.map((r) => r.toJson()).toList(),
@@ -418,6 +605,25 @@ class AppState extends ChangeNotifier {
     reminderMinute = (j['reminderMinute'] as num?)?.toInt() ?? 0;
     pinHash = (j['pinHash'] as String?) ?? '';
     useBiometric = (j['useBiometric'] as bool?) ?? false;
+    hideBalance = (j['hideBalance'] as bool?) ?? false;
+    lastLocation = (j['lastLocation'] as String?) ?? '';
+    profilePhoto = (j['profilePhoto'] as String?) ?? '';
+    phone = (j['phone'] as String?) ?? '';
+    email = (j['email'] as String?) ?? '';
+    city = (j['city'] as String?) ?? '';
+    motto = (j['motto'] as String?) ?? '';
+    themeMode = (j['themeMode'] as String?) ?? 'system';
+    colorTheme = (j['colorTheme'] as String?) ?? 'green';
+    splitPlan = {};
+    final sp = j['splitPlan'];
+    if (sp is Map) {
+      sp.forEach((k, v) {
+        if (v is num && v > 0) splitPlan[k.toString()] = v.toInt();
+      });
+    }
+    plans = _list(j['plans'], SavePlan.fromJson);
+    bills = _list(j['bills'], Bill.fromJson);
+    debts = _list(j['debts'], Debt.fromJson);
   }
 
   void _changed() {
@@ -462,6 +668,15 @@ class AppState extends ChangeNotifier {
     pinHash = '';
     useBiometric = false;
     locations = List<String>.from(defaultLocations);
+    profilePhoto = '';
+    phone = '';
+    email = '';
+    city = '';
+    motto = '';
+    splitPlan = {};
+    plans = [];
+    bills = [];
+    debts = [];
     _changed();
   }
 
@@ -518,6 +733,11 @@ class AppState extends ChangeNotifier {
   }
 
   bool checkPin(String pin) => hasPin && hashPin(pin) == pinHash;
+
+  void toggleHideBalance() {
+    hideBalance = !hideBalance;
+    _changed();
+  }
 
   void setBiometric(bool on) {
     useBiometric = on && hasPin;
@@ -587,6 +807,10 @@ class AppState extends ChangeNotifier {
   double moneyFraction(Goal g) => g.target <= 0
       ? 0.0
       : (balance(g.id) / g.target).clamp(0.0, 1.0).toDouble();
+
+  String get quickLocation => lastLocation.isNotEmpty
+      ? lastLocation
+      : (locations.isNotEmpty ? locations.first : '');
 
   // ---------- goals ----------
   Goal? get mainGoal {
@@ -913,7 +1137,8 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- transactions ----------
-  void addSaving({
+  /// Returns the ids of the entries made, so they can be undone.
+  List<String> addSaving({
     required double amount,
     required String goalId,
     required String location,
@@ -938,18 +1163,22 @@ class AppState extends ChangeNotifier {
             loanId.isEmpty)
         ? statContaining(g, day)
         : null;
+    final made = <Txn>[];
     if (g != null && st != null) {
       // Only the part up to the period target goes to the goal; the rest is extra.
       final target = st.target.ceilToDouble();
       final already = savedInRange(g.id, st.start, st.end);
       final goalPart = min(amount, max(0.0, target - already));
       final extraPart = amount - goalPart;
-      if (goalPart > 0) txns.add(make(g.id, goalPart));
-      if (extraPart > 0) txns.add(make(bufferId, extraPart));
+      if (goalPart > 0) made.add(make(g.id, goalPart));
+      if (extraPart > 0) made.add(make(bufferId, extraPart));
     } else {
-      txns.add(make(goalId, amount));
+      made.add(make(goalId, amount));
     }
+    txns.addAll(made);
+    if (location.isNotEmpty) lastLocation = location;
     _changed();
+    return made.map((x) => x.id).toList();
   }
 
   void addSpending({
@@ -1040,6 +1269,11 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void deleteTxns(List<String> ids) {
+    txns.removeWhere((x) => ids.contains(x.id));
+    _changed();
+  }
+
   void deleteTxn(String id) {
     txns.removeWhere((x) => x.id == id);
     _changed();
@@ -1117,6 +1351,275 @@ class AppState extends ChangeNotifier {
       }
     }
     return best;
+  }
+
+
+  // ---------- profile and settings (applied on Save) ----------
+  void saveProfile({
+    required String name,
+    required String photo,
+    required String phone,
+    required String email,
+    required String city,
+    required String motto,
+  }) {
+    userName = name.trim();
+    profilePhoto = photo;
+    this.phone = phone.trim();
+    this.email = email.trim();
+    this.city = city.trim();
+    this.motto = motto.trim();
+    _changed();
+  }
+
+  void applySettings({
+    required String lang,
+    required String themeMode,
+    required String colorTheme,
+    required int saveFirstPercent,
+    required bool reminderOn,
+    required int reminderHour,
+    required int reminderMinute,
+    required List<String> locations,
+    String? period,
+    double? fixedAmount,
+  }) {
+    this.lang = lang;
+    currentLang = lang;
+    this.themeMode = themeMode;
+    this.colorTheme = colorTheme;
+    this.saveFirstPercent = saveFirstPercent.clamp(0, 100).toInt();
+    this.reminderOn = reminderOn;
+    this.reminderHour = reminderHour;
+    this.reminderMinute = reminderMinute;
+    if (locations.isNotEmpty) this.locations = List<String>.from(locations);
+    final g = mainGoal;
+    if (g != null) {
+      if (period != null) g.period = period;
+      g.fixedAmount = (fixedAmount != null && fixedAmount > 0) ? fixedAmount : null;
+    }
+    _changed();
+  }
+
+  // ---------- wallet ----------
+  bool get hasIncome => txns.any((x) => x.kind == 'income');
+
+  /// Everyday money: income - spending - saved + withdrawn.
+  double get walletBalance =>
+      _sum((x) => x.kind == 'income') -
+      _sum((x) => x.kind == 'spending') -
+      _sum((x) => x.kind == 'saving' && x.reason != 'opening') +
+      _sum((x) => x.kind == 'withdrawal');
+
+  // ---------- split plan ----------
+  int get splitTotal {
+    var t = 0;
+    splitPlan.forEach((k, v) {
+      if (k == bufferId || goalById(k) != null) t += v;
+    });
+    return t;
+  }
+
+  bool get splitReady => splitTotal == 100;
+
+  void setSplitPlan(Map<String, int> plan) {
+    splitPlan = Map<String, int>.from(plan)..removeWhere((k, v) => v <= 0);
+    _changed();
+  }
+
+  List<String> addSplitSaving({
+    required double amount,
+    required String location,
+    required DateTime date,
+    String note = '',
+  }) {
+    final parts = splitPlan.entries
+        .where((e) => e.value > 0 && (e.key == bufferId || goalById(e.key) != null))
+        .toList();
+    final ids = <String>[];
+    var left = amount;
+    for (var i = 0; i < parts.length; i++) {
+      final last = i == parts.length - 1;
+      final a = last ? left : (amount * parts[i].value / 100).roundToDouble();
+      left -= a;
+      if (a > 0) {
+        ids.addAll(addSaving(
+            amount: a, goalId: parts[i].key, location: location, date: date, note: note));
+      }
+    }
+    return ids;
+  }
+
+  // ---------- recurring plans ----------
+  void upsertPlan(SavePlan p) {
+    plans.removeWhere((x) => x.id == p.id);
+    plans.add(p);
+    _changed();
+  }
+
+  void deletePlan(SavePlan p) {
+    plans.removeWhere((x) => x.id == p.id);
+    _changed();
+  }
+
+  List<String> confirmPlan(SavePlan p) {
+    p.lastDone = DateTime.now();
+    return addSaving(
+        amount: p.amount, goalId: p.goalId, location: quickLocation, date: DateTime.now());
+  }
+
+  List<SavePlan> get plansDueToday =>
+      plans.where((p) => p.dueToday && (p.goalId == bufferId || goalById(p.goalId) != null)).toList();
+
+  // ---------- bills ----------
+  void upsertBill(Bill b) {
+    bills.removeWhere((x) => x.id == b.id);
+    bills.add(b);
+    bills.sort((a, c) => a.dueDay.compareTo(c.dueDay));
+    _changed();
+  }
+
+  void deleteBill(Bill b) {
+    bills.removeWhere((x) => x.id == b.id);
+    _changed();
+  }
+
+  void payBill(Bill b, {String location = ''}) {
+    b.lastPaidMonth = Bill.monthKey(DateTime.now());
+    addSpending(
+        amount: b.amount,
+        category: 'bills',
+        location: location,
+        date: DateTime.now(),
+        note: b.name);
+  }
+
+  /// Unpaid bills due within 3 days or overdue this month.
+  List<Bill> get billsDueSoon =>
+      bills.where((b) => !b.paidThisMonth && b.daysToDue <= 3).toList();
+
+  // ---------- money owed ----------
+  void upsertDebt(Debt d) {
+    debts.removeWhere((x) => x.id == d.id);
+    debts.add(d);
+    _changed();
+  }
+
+  void deleteDebt(Debt d) {
+    debts.removeWhere((x) => x.id == d.id);
+    _changed();
+  }
+
+  void payDebt(Debt d, double amount) {
+    d.paid = min(d.amount, d.paid + amount);
+    _changed();
+  }
+
+  double get owedToMe => debts
+      .where((d) => d.direction == 'owedToMe')
+      .fold<double>(0, (a, d) => a + d.remaining);
+
+  double get iOwe =>
+      debts.where((d) => d.direction == 'iOwe').fold<double>(0, (a, d) => a + d.remaining);
+
+  List<Debt> get debtsDueSoon => debts
+      .where((d) =>
+          !d.settled &&
+          d.dueDate != null &&
+          daysBetween(DateTime.now(), d.dueDate!) <= 3)
+      .toList();
+
+  // ---------- calendar ----------
+  /// Status of one day for the saving calendar:
+  /// 'met', 'short', 'missed', 'saved', 'none', 'future', 'today'.
+  Map<String, String> calendarStatus(DateTime month) {
+    final out = <String, String>{};
+    final today = dayOnly(DateTime.now());
+    final g = mainGoal;
+    final byDay = <String, PeriodStat>{};
+    if (g != null && g.period == 'day') {
+      for (final s in periodStats(g)) {
+        byDay[dayKey(s.start)] = s;
+      }
+    }
+    final last = DateTime(month.year, month.month + 1, 0).day;
+    for (var d = 1; d <= last; d++) {
+      final day = DateTime(month.year, month.month, d);
+      final k = dayKey(day);
+      if (day.isAfter(today)) {
+        out[k] = 'future';
+        continue;
+      }
+      final st = byDay[k];
+      if (st != null) {
+        if (st.met && st.target > 0.5) {
+          out[k] = 'met';
+        } else if (sameDay(day, today)) {
+          out[k] = st.actual > 0 ? 'short' : 'today';
+        } else if (st.target <= 0.5) {
+          out[k] = st.actual > 0 ? 'met' : 'none';
+        } else {
+          out[k] = st.actual > 0 ? 'short' : 'missed';
+        }
+      } else {
+        out[k] = totalOn('saving', day) > 0 ? 'saved' : 'none';
+      }
+    }
+    return out;
+  }
+
+  // ---------- smart tips ----------
+  List<Tip> tips() {
+    final out = <Tip>[];
+    final today = dayOnly(DateTime.now());
+    final thisFrom = addDays(today, -6);
+    final prevFrom = addDays(today, -13);
+    final prevTo = addDays(today, -7);
+    final now = spendingByCategory(thisFrom, today);
+    final before = spendingByCategory(prevFrom, prevTo);
+    String? bestCat;
+    var bestChange = 0.0;
+    now.forEach((c, v) {
+      final b = before[c] ?? 0;
+      if (b > 0 && v >= 1000) {
+        final ch = (v - b) / b;
+        if (ch.abs() > bestChange.abs()) {
+          bestChange = ch;
+          bestCat = c;
+        }
+      }
+    });
+    if (bestCat != null && bestChange.abs() >= 0.3) {
+      out.add(Tip(
+          bestChange > 0 ? 'up' : 'down',
+          tf(bestChange > 0 ? 'tipCatUp' : 'tipCatDown', {
+            'c': t('cat_$bestCat'),
+            'p': '${(bestChange.abs() * 100).round()}',
+          })));
+    }
+    final byWeekday = List<double>.filled(7, 0);
+    for (final x in txns) {
+      if (x.kind == 'saving' && x.reason != 'opening' && inRange(x.date, addDays(today, -55), today)) {
+        byWeekday[x.date.weekday - 1] += x.amount;
+      }
+    }
+    final top = byWeekday.reduce((a, b) => a > b ? a : b);
+    if (top > 0) {
+      final i = byWeekday.indexOf(top);
+      out.add(Tip('star', tf('tipBestDay', {'d': weekdayLong(i + 1)})));
+    }
+    final mFrom = monthStart(today);
+    final inc = totalBetween('income', mFrom, today);
+    if (inc > 0) {
+      final net = totalBetween('saving', mFrom, today) - totalBetween('withdrawal', mFrom, today);
+      out.add(Tip('pie', tf('tipRate', {'p': '${(net / inc * 100).round()}'})));
+    }
+    final g = mainGoal;
+    if (g != null) {
+      final s = streak(g);
+      if (s >= 3) out.add(Tip('fire', tf('tipStreak', {'n': '$s'})));
+    }
+    return out;
   }
 
   // ---------- challenges ----------
