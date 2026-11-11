@@ -2,20 +2,21 @@
 
 Akiba turns one big saving goal into a daily target. Every shilling saved above the target goes to an Extra pot, and missed days are spread over the remaining days instead of counting as failure.
 
-## Features (version 1)
+## Features (version 2)
 
-- **Main goal** with amount, deadline and automatic daily target
-- **Daily saving log** with quick amounts (500 – 10,000), savings location (M-Pesa, Mixx by Yas, Airtel Money, Bank, Cash, or your own) and logging up to 7 days back
-- **Extra pot**: extra above the daily target either goes to the main goal (finish early) or to an emergency buffer
-- **Shortfall recovery**: after a short or missed day the app shows the new target and lets you extend the deadline
-- **Spending tracker** by category: food, transport, airtime & data, bills, family, other
-- **Mini-goals** beside the main goal
-- **History**: every day marked above / on target / short / missed, plus all entries (swipe left to delete)
-- **Insights**: last 7 days saved vs spent, top spending category, 30-day spending by category, savings by location
-- **Streak** and **projected finish date**
-- **Kiswahili and English**, light and dark mode
-- **Backup and restore** by copying your data as text
-- All data stays on the phone; no internet needed
+- **Goals** with a target, deadline, starting amount, photo and optional 24-hour withdrawal lock
+- **Daily, weekly or monthly targets**, automatic or your own fixed amount
+- **Time vs money pace** ("Day 12 of 90") and projected finish date
+- **Log** savings, spending, withdrawals and income, up to 7 days back
+- **Withdrawals** with reason, impact preview, "borrow from myself" pay-back plans and emergency override for locked goals
+- **Extra pot** to the main goal or an emergency buffer; **shortfall recovery**
+- **Income** with a "save first" suggestion (percentage set in Settings)
+- **Spending limits** per category with warnings
+- **Balances per location** (M-Pesa, bank, cash and your own)
+- **Challenges** (52-week, no-spend days, 30-day streak) and **badges**
+- **Monthly PDF report** to share
+- **Daily reminder**, **PIN and fingerprint lock**
+- Kiswahili and English, light and dark mode, backup and restore
 
 ## Get the APK on your phone
 
@@ -46,9 +47,14 @@ The APK is at `build/app/outputs/flutter-apk/app-release.apk`.
 
 | File | What it holds |
 | --- | --- |
-| `lib/main.dart` | App start and theme |
+| `lib/main.dart` | App start, theme and lock |
 | `lib/state.dart` | Data model, saving logic, daily target and extra calculations, storage |
-| `lib/screens.dart` | Onboarding, Home, Goals, History, Insights, Settings |
+| `lib/screens.dart` | Onboarding, Home, Goals, History |
+| `lib/insights.dart` | Insights and Rewards |
+| `lib/settings.dart` | Settings and lock screen |
+| `lib/services.dart` | Reminders, fingerprint, photos, PDF report |
+| `tool/patch_android.py` | Android permissions and settings used by the build |
+| `assets/icon/` | App icon |
 | `lib/sheets.dart` | Log saving/spending and goal forms |
 | `lib/widgets.dart` | Shared cards and list items |
 | `lib/i18n.dart` | Kiswahili and English text |
