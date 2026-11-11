@@ -76,6 +76,74 @@ elif groovy.exists():
 else:
     sys.exit('No app build.gradle found')
 
+# ---------- Release signing (only when the key was provided) ----------
+if (pathlib.Path('android') / 'key.properties').exists():
+    if kts.exists():
+        g = kts.read_text()
+        block = '''    signingConfigs {
+        create("release") {
+            val props = java.util.Properties()
+            props.load(java.io.FileInputStream(rootProject.file("key.properties")))
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+            storeFile = file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+        }
+    }
+
+'''
+        if 'create("release")' not in g:
+            g = g.replace('    buildTypes {', block + '    buildTypes {', 1)
+        g = g.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+        kts.write_text(g)
+    else:
+        g = groovy.read_text()
+        block = '''    signingConfigs {
+        release {
+            def props = new Properties()
+            props.load(new FileInputStream(rootProject.file("key.properties")))
+            keyAlias props['keyAlias']
+            keyPassword props['keyPassword']
+            storeFile file(props['storeFile'])
+            storePassword props['storePassword']
+        }
+    }
+
+'''
+        if 'signingConfigs {' not in g:
+            g = g.replace('    buildTypes {', block + '    buildTypes {', 1)
+        g = g.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+        groovy.write_text(g)
+    print('Release signing set up')
+else:
+    print('No signing key given: using a temporary key')
+
+# ---------- Home-screen widget ----------
+import shutil
+src = pathlib.Path('tool')
+res = app / 'src/main/res'
+for name, sub, target in [
+    ('widget_layout.xml', 'layout', 'akiba_widget.xml'),
+    ('widget_info.xml', 'xml', 'akiba_widget_info.xml'),
+    ('widget_bg.xml', 'drawable', 'akiba_widget_bg.xml'),
+]:
+    (res / sub).mkdir(parents=True, exist_ok=True)
+    shutil.copy(src / name, res / sub / target)
+widget_receiver = '''
+        <receiver android:name=".AkibaWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/akiba_widget_info" />
+        </receiver>
+'''
+m = man.read_text()
+if 'AkibaWidgetProvider' not in m:
+    m = m.replace('</application>', widget_receiver + '    </application>', 1)
+    man.write_text(m)
+print('Widget resources added')
+
 # ---------- MainActivity ----------
 found = False
 for p in list(app.rglob('MainActivity.kt')) + list(app.rglob('MainActivity.java')):
@@ -86,5 +154,10 @@ for p in list(app.rglob('MainActivity.kt')) + list(app.rglob('MainActivity.java'
     p.write_text(t)
     found = True
     print('Patched', p)
+    if p.suffix == '.kt':
+        pkg = re.search(r'^package\s+([\w.]+)', t, re.M).group(1)
+        k = (src / 'AkibaWidgetProvider.kt').read_text().replace('PACKAGE_NAME', pkg)
+        (p.parent / 'AkibaWidgetProvider.kt').write_text(k)
+        print('Widget provider added in', pkg)
 if not found:
     sys.exit('MainActivity not found')
