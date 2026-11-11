@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'format.dart';
@@ -27,11 +29,45 @@ String goalLabel(String id) {
   return app.goalById(id)?.name ?? '-';
 }
 
+/// "Today's target" / "This week's target" / "This month's target".
+String targetLabel(Goal g) => switch (g.period) {
+      'week' => t('weekTarget'),
+      'month' => t('monthTarget'),
+      _ => t('todayTarget'),
+    };
+
+String savedPeriodLabel(Goal g) => switch (g.period) {
+      'week' => t('savedThisWeek'),
+      'month' => t('savedThisMonth'),
+      _ => t('savedToday'),
+    };
+
+String perLabel(Goal g) => switch (g.period) {
+      'week' => t('perWeek'),
+      'month' => t('perMonth'),
+      _ => t('perDay'),
+    };
+
+String periodName(String p) => switch (p) {
+      'week' => t('weekly'),
+      'month' => t('monthly'),
+      _ => t('daily'),
+    };
+
+/// Label for a period row in History.
+String periodTitle(PeriodStat s, Goal g) {
+  if (g.period == 'day') return fmtDate(s.start);
+  if (g.period == 'month') return '${monthLong(s.start.month)} ${s.start.year}';
+  return '${shortDate(s.start)} - ${shortDate(s.end)}';
+}
+
 class SectionCard extends StatelessWidget {
   final String? title;
   final Widget child;
   final Color? color;
-  const SectionCard({super.key, this.title, required this.child, this.color});
+  final Widget? trailing;
+  const SectionCard(
+      {super.key, this.title, required this.child, this.color, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -45,12 +81,19 @@ class SectionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (title != null) ...[
-              Text(
-                title!,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title!,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (trailing != null) trailing!,
+                ],
               ),
               const SizedBox(height: 10),
             ],
@@ -77,6 +120,15 @@ Widget statRow(String label, String value, {Color? color, bool bold = false}) {
         ),
       ],
     ),
+  );
+}
+
+Widget progressBar(double value, {Color? color, double height = 8}) {
+  return LinearProgressIndicator(
+    value: value.isNaN ? 0.0 : value.clamp(0.0, 1.0).toDouble(),
+    minHeight: height,
+    color: color,
+    borderRadius: BorderRadius.circular(8),
   );
 }
 
@@ -108,30 +160,89 @@ class TxnTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isSave = tx.kind == 'saving';
+    IconData icon;
+    Color bg;
+    Color fg;
+    String title;
+    String sign;
+    Color amountColor;
+    switch (tx.kind) {
+      case 'saving':
+        icon = Icons.savings_outlined;
+        bg = cs.primaryContainer;
+        fg = cs.onPrimaryContainer;
+        title = tx.reason == 'opening'
+            ? '${goalLabel(tx.goalId)} · ${t('startingAmount')}'
+            : tx.loanId.isNotEmpty
+                ? '${goalLabel(tx.goalId)} · ${t('repayment')}'
+                : goalLabel(tx.goalId);
+        sign = '+';
+        amountColor = cs.primary;
+        break;
+      case 'withdrawal':
+        icon = Icons.call_made;
+        bg = Colors.orange.shade100;
+        fg = Colors.orange.shade900;
+        title = '${t('withdrawal')} · ${goalLabel(tx.goalId)}';
+        sign = '-';
+        amountColor = Colors.orange.shade800;
+        break;
+      case 'income':
+        icon = Icons.payments_outlined;
+        bg = cs.tertiaryContainer;
+        fg = cs.onTertiaryContainer;
+        title = '${t('income')} · ${t('src_${tx.reason}')}';
+        sign = '+';
+        amountColor = cs.tertiary;
+        break;
+      default:
+        icon = Icons.shopping_bag_outlined;
+        bg = cs.errorContainer;
+        fg = cs.onErrorContainer;
+        title = t('cat_${tx.category}');
+        sign = '-';
+        amountColor = cs.error;
+    }
     final parts = <String>[
       shortDate(tx.date),
+      if (tx.kind == 'withdrawal') t('why_${tx.reason}'),
+      if (tx.isLoan) t('loan'),
       if (tx.location.isNotEmpty) tx.location,
       if (tx.note.isNotEmpty) tx.note,
     ];
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
-        backgroundColor: isSave ? cs.primaryContainer : cs.errorContainer,
-        child: Icon(
-          isSave ? Icons.savings_outlined : Icons.shopping_bag_outlined,
-          color: isSave ? cs.onPrimaryContainer : cs.onErrorContainer,
-        ),
+        backgroundColor: bg,
+        child: Icon(icon, color: fg),
       ),
-      title: Text(isSave ? goalLabel(tx.goalId) : t('cat_${tx.category}')),
+      title: Text(title),
       subtitle: Text(parts.join(' · ')),
       trailing: Text(
-        '${isSave ? '+' : '-'}${num0(tx.amount)}',
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          color: isSave ? cs.primary : cs.error,
-        ),
+        '$sign${num0(tx.amount)}',
+        style: TextStyle(fontWeight: FontWeight.w700, color: amountColor),
       ),
+    );
+  }
+}
+
+class GoalPhoto extends StatelessWidget {
+  final String? path;
+  final double height;
+  const GoalPhoto(this.path, {super.key, this.height = 130});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = path;
+    if (p == null || p.isEmpty) return const SizedBox.shrink();
+    final f = File(p);
+    if (!f.existsSync()) return const SizedBox.shrink();
+    return Image.file(
+      f,
+      height: height,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 }
@@ -145,54 +256,69 @@ class GoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final today = dayOnly(DateTime.now());
-    final saved = app.savedFor(goal.id);
-    final double pct =
-        goal.target <= 0 ? 0.0 : (saved / goal.target).clamp(0.0, 1.0).toDouble();
+    final saved = app.balance(goal.id);
+    final double pct = goal.target <= 0
+        ? 0.0
+        : (saved / goal.target).clamp(0.0, 1.0).toDouble();
     final done = saved >= goal.target;
     final left = daysBetween(today, goal.deadline);
-    final perDay = app.targetFor(goal, today);
+    final cur = app.currentStat(goal);
+    final dayOfText = tf('dayOf', {
+      'a': app.dayNumber(goal).toString(),
+      'b': app.totalDays(goal).toString(),
+    });
+    final dueText = left >= 0
+        ? '$dayOfText · $left ${t('daysLeft')}'
+        : t('deadlinePassed');
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GoalPhoto(goal.photoPath),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(goal.name,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  Row(
+                    children: [
+                      if (goal.locked) ...[
+                        Icon(Icons.lock_outline,
+                            size: 18, color: theme.colorScheme.primary),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(goal.name,
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                      ),
+                      Text(
+                        goal.type == 'main' ? t('mainGoal') : t('miniGoal'),
+                        style: theme.textTheme.labelMedium
+                            ?.copyWith(color: theme.colorScheme.primary),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 10),
+                  progressBar(pct, height: 10),
+                  const SizedBox(height: 8),
                   Text(
-                    goal.type == 'main' ? t('mainGoal') : t('miniGoal'),
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: theme.colorScheme.primary),
+                      '${money(saved)} ${t('of')} ${money(goal.target)}  ·  ${(pct * 100).toStringAsFixed(0)}%'),
+                  const SizedBox(height: 4),
+                  Text(
+                    done
+                        ? t('goalDone')
+                        : '${moneyUp(cur.target)} ${perLabel(goal)}  ·  ${t('due')} ${fmtDate(goal.deadline)}  ·  $dueText',
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              LinearProgressIndicator(
-                value: pct,
-                minHeight: 10,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              const SizedBox(height: 8),
-              Text('${money(saved)} ${t('of')} ${money(goal.target)}  ·  ${(pct * 100).toStringAsFixed(0)}%'),
-              const SizedBox(height: 4),
-              Text(
-                done
-                    ? t('goalDone')
-                    : '${moneyUp(perDay)} ${t('perDay')}  ·  ${t('due')} ${fmtDate(goal.deadline)}'
-                        '${left >= 0 ? '  ·  $left ${t('daysLeft')}' : '  ·  ${t('deadlinePassed')}'}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -200,10 +326,11 @@ class GoalCard extends StatelessWidget {
 }
 
 Future<bool> confirmDialog(BuildContext context, String message,
-    {String? okLabel}) async {
+    {String? okLabel, String? title}) async {
   final r = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
+      title: title == null ? null : Text(title),
       content: Text(message),
       actions: [
         TextButton(
@@ -218,8 +345,8 @@ Future<bool> confirmDialog(BuildContext context, String message,
 }
 
 Future<String?> askText(BuildContext context, String title,
-    {int maxLines = 1}) async {
-  final ctl = TextEditingController();
+    {int maxLines = 1, bool number = false, String initial = ''}) async {
+  final ctl = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -228,6 +355,7 @@ Future<String?> askText(BuildContext context, String title,
         controller: ctl,
         autofocus: true,
         maxLines: maxLines,
+        keyboardType: number ? TextInputType.number : TextInputType.text,
         decoration: const InputDecoration(border: OutlineInputBorder()),
       ),
       actions: [
@@ -240,3 +368,6 @@ Future<String?> askText(BuildContext context, String title,
     ),
   );
 }
+
+Widget chipWrap(List<Widget> chips) =>
+    Wrap(spacing: 8, runSpacing: 4, children: chips);

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import 'format.dart';
 import 'i18n.dart';
+import 'insights.dart';
+import 'settings.dart';
 import 'sheets.dart';
 import 'state.dart';
 import 'widgets.dart';
@@ -22,6 +24,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _name = TextEditingController();
   final _goal = TextEditingController();
   final _amount = TextEditingController();
+  final _startCtl = TextEditingController();
+  String _startLocation = app.locations.isNotEmpty ? app.locations.first : '';
   DateTime _deadline = addDays(dayOnly(DateTime.now()), 90);
   String? _error;
 
@@ -30,10 +34,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _name.dispose();
     _goal.dispose();
     _amount.dispose();
+    _startCtl.dispose();
     super.dispose();
   }
 
   double get _amt => double.tryParse(_amount.text) ?? 0;
+  double get _startAmt => double.tryParse(_startCtl.text) ?? 0;
 
   Future<void> _pickDeadline() async {
     final today = dayOnly(DateTime.now());
@@ -55,6 +61,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       setState(() => _error = t('invalidAmount'));
       return;
     }
+    if (_startAmt >= _amt) {
+      setState(() => _error = t('startTooBig'));
+      return;
+    }
     final today = dayOnly(DateTime.now());
     app.completeOnboarding(
       _name.text,
@@ -66,6 +76,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         start: today,
         deadline: dayOnly(_deadline),
       ),
+      startAmount: _startAmt,
+      startLocation: _startLocation,
     );
   }
 
@@ -74,8 +86,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final today = dayOnly(DateTime.now());
-    final left = max(1, daysBetween(today, _deadline) + 1);
-    final preview = _amt > 0 ? _amt / left : 0.0;
+    final days = max(1, daysBetween(today, _deadline) + 1);
+    final need = _amt - _startAmt;
+    final preview = need > 0 ? need / days : 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -132,10 +145,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   border: const OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
+            TextField(
+              controller: _startCtl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                  labelText: t('alreadySaved'),
+                  helperText: t('alreadySavedHelp'),
+                  border: const OutlineInputBorder()),
+            ),
+            if (_startAmt > 0) ...[
+              const SizedBox(height: 12),
+              Text(t('whereKept'), style: theme.textTheme.labelLarge),
+              const SizedBox(height: 8),
+              chipWrap([
+                for (final l in app.locations)
+                  ChoiceChip(
+                    label: Text(l),
+                    selected: _startLocation == l,
+                    onSelected: (_) => setState(() => _startLocation = l),
+                  ),
+              ]),
+            ],
+            const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _pickDeadline,
               icon: const Icon(Icons.event),
-              label: Text('${t('deadline')}: ${fmtDate(_deadline)}'),
+              label: Text(
+                  '${t('deadline')}: ${fmtDate(_deadline)}  ($days ${t('days').toLowerCase()})'),
             ),
             if (preview > 0) ...[
               const SizedBox(height: 16),
@@ -152,6 +190,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           style: theme.textTheme.headlineSmall?.copyWith(
                               color: cs.onPrimaryContainer,
                               fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(t('changeLater'),
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: cs.onPrimaryContainer)),
                     ],
                   ),
                 ),
@@ -194,15 +237,17 @@ class _ShellState extends State<Shell> {
       builder: (context, _) {
         final pages = <Widget>[
           HomeScreen(onSeeAll: () => setState(() => _index = 2)),
-          GoalsScreen(),
-          HistoryScreen(),
-          InsightsScreen(),
+          const GoalsScreen(),
+          const HistoryScreen(),
+          const InsightsScreen(),
+          const RewardsScreen(),
         ];
         final titles = [
           app.userName.isEmpty ? t('hello') : '${t('hello')}, ${app.userName}',
           t('goals'),
           t('history'),
           t('insights'),
+          t('rewards'),
         ];
         return Scaffold(
           appBar: AppBar(
@@ -218,7 +263,10 @@ class _ShellState extends State<Shell> {
               ),
             ],
           ),
-          body: pages[_index],
+          body: KeyedSubtree(
+            key: ValueKey('tab$_index${app.lang}'),
+            child: pages[_index],
+          ),
           floatingActionButton: app.activeGoals.isEmpty && _index == 0
               ? null
               : FloatingActionButton.extended(
@@ -228,6 +276,7 @@ class _ShellState extends State<Shell> {
                 ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: _index,
+            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
             onDestinationSelected: (i) => setState(() => _index = i),
             destinations: [
               NavigationDestination(
@@ -246,6 +295,10 @@ class _ShellState extends State<Shell> {
                   icon: const Icon(Icons.insights_outlined),
                   selectedIcon: const Icon(Icons.insights),
                   label: t('insights')),
+              NavigationDestination(
+                  icon: const Icon(Icons.emoji_events_outlined),
+                  selectedIcon: const Icon(Icons.emoji_events),
+                  label: t('rewards')),
             ],
           ),
         );
@@ -276,13 +329,58 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
+  String _hoursLeft(WithdrawRequest r) {
+    final mins = r.readyAt.difference(DateTime.now()).inMinutes;
+    final h = (mins / 60).floor();
+    final m = mins % 60;
+    return '${h}h ${m}m';
+  }
+
+  List<Widget> _requestCards(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final out = <Widget>[];
+    for (final r in app.requests) {
+      final ready = r.isReady;
+      out.add(SectionCard(
+        color: ready ? cs.secondaryContainer : null,
+        title: t('withdrawRequest'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('${money(r.amount)} · ${goalLabel(r.goalId)} · ${t('why_${r.reason}')}'),
+            const SizedBox(height: 4),
+            Text(ready
+                ? t('requestReady')
+                : tf('requestWait', {'a': _hoursLeft(r)})),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => app.cancelRequest(r),
+                  child: Text(t('cancelRequest')),
+                ),
+                if (ready)
+                  FilledButton(
+                    onPressed: () => app.completeRequest(r),
+                    child: Text(t('withdrawNow')),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ));
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final today = dayOnly(DateTime.now());
     final g = app.mainGoal;
-    final children = <Widget>[];
+    final children = <Widget>[..._requestCards(context)];
 
     if (g == null) {
       children.add(SectionCard(
@@ -302,13 +400,11 @@ class HomeScreen extends StatelessWidget {
         ),
       ));
     } else {
-      final saved = app.savedFor(g.id);
+      final saved = app.balance(g.id);
       final done = saved >= g.target;
-      final stats = app.dayStats(g);
-      final ts = stats.isNotEmpty
-          ? stats.last
-          : DayStat(today, app.targetFor(g, today), 0);
-      final y = stats.length >= 2 ? stats[stats.length - 2] : null;
+      final stats = app.periodStats(g);
+      final ts = stats.isNotEmpty ? stats.last : app.currentStat(g);
+      final prev = stats.length >= 2 ? stats[stats.length - 2] : null;
 
       children.add(GoalCard(g, onTap: () => showGoalSheet(context, goal: g)));
 
@@ -318,6 +414,8 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Icon(Icons.celebration, size: 40, color: cs.onPrimaryContainer),
+              const SizedBox(height: 8),
               Text(t('goalDone'),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -335,65 +433,118 @@ class HomeScreen extends StatelessWidget {
           ),
         ));
       } else {
-        // Today
+        // Current period
         final met = ts.met;
         children.add(SectionCard(
-          title: t('today'),
+          title: g.period == 'day'
+              ? t('today')
+              : '${periodName(g.period)} · ${shortDate(ts.start)} - ${shortDate(ts.end)}',
           color: met ? cs.primaryContainer : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              statRow(t('todayTarget'), moneyUp(ts.target), bold: true),
-              statRow(t('savedToday'), money(ts.actual)),
+              statRow(
+                  g.isFixed
+                      ? '${targetLabel(g)} (${t('fixedTag')})'
+                      : targetLabel(g),
+                  moneyUp(ts.target),
+                  bold: true),
+              statRow(savedPeriodLabel(g), money(ts.actual)),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: ts.target <= 0
-                    ? 1.0
-                    : (ts.actual / ts.target).clamp(0.0, 1.0).toDouble(),
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              progressBar(ts.target <= 0 ? 1.0 : ts.actual / ts.target),
               const SizedBox(height: 10),
               if (met)
                 Text(
                   ts.extra > 0
-                      ? '${t('targetMet')}  ${t('extraToday')}: ${money(ts.extra)}'
+                      ? '${t('targetMet')}  ${t('extraLabel')}: ${money(ts.extra)}'
                       : t('targetMet'),
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, color: cs.primary),
+                  style:
+                      TextStyle(fontWeight: FontWeight.w700, color: cs.primary),
                 )
               else
-                Text('${t('remainingToday')}: ${moneyUp(ts.shortfall)}',
+                Text('${t('remainingPeriod')}: ${moneyUp(ts.shortfall)}',
                     style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
         ));
 
+        // Time vs money
+        final tf_ = app.timeFraction(g);
+        final mf = app.moneyFraction(g);
+        final ahead = mf >= tf_ - 0.02;
+        children.add(SectionCard(
+          title: t('pace'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                SizedBox(width: 110, child: Text(t('timeUsed'))),
+                Expanded(child: progressBar(tf_, color: cs.outline)),
+                const SizedBox(width: 8),
+                SizedBox(
+                    width: 40,
+                    child: Text('${(tf_ * 100).round()}%',
+                        textAlign: TextAlign.right)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                SizedBox(width: 110, child: Text(t('moneySaved'))),
+                Expanded(child: progressBar(mf)),
+                const SizedBox(width: 8),
+                SizedBox(
+                    width: 40,
+                    child: Text('${(mf * 100).round()}%',
+                        textAlign: TextAlign.right)),
+              ]),
+              const SizedBox(height: 10),
+              Text(
+                ahead ? t('paceAhead') : t('paceBehind'),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: ahead ? Colors.green.shade700 : Colors.orange.shade800),
+              ),
+            ],
+          ),
+        ));
+
         // Shortfall recovery
-        if (y != null && !y.met) {
+        if (prev != null && !prev.met) {
+          String msg;
+          if (g.isFixed) {
+            final f = app.finishAt(g, g.fixedAmount!);
+            final params = {
+              'a': moneyUp(prev.shortfall),
+              'b': '${moneyUp(g.fixedAmount!)} ${perLabel(g)}',
+              'c': f == null ? '-' : fmtDate(f),
+            };
+            msg = prev.actual <= 0
+                ? tf('missedFixed', params)
+                : tf('shortFixed', params);
+          } else {
+            msg = prev.actual <= 0
+                ? tf('missedPrev', {'b': moneyUp(ts.target)})
+                : tf('shortPrev', {
+                    'a': moneyUp(prev.shortfall),
+                    'b': moneyUp(ts.target)
+                  });
+          }
           children.add(SectionCard(
             color: cs.tertiaryContainer,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  y.actual <= 0
-                      ? tf('missedYesterday', {'b': moneyUp(ts.target)})
-                      : tf('shortYesterday', {
-                          'a': moneyUp(y.shortfall),
-                          'b': moneyUp(ts.target)
-                        }),
-                  style: TextStyle(color: cs.onTertiaryContainer),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _extend(context, g),
-                    icon: const Icon(Icons.event_repeat),
-                    label: Text(t('extendDeadline')),
+                Text(msg, style: TextStyle(color: cs.onTertiaryContainer)),
+                if (!g.isFixed) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _extend(context, g),
+                      icon: const Icon(Icons.event_repeat),
+                      label: Text(t('extendDeadline')),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ));
@@ -404,6 +555,7 @@ class HomeScreen extends StatelessWidget {
         final finish = app.projectedFinish(g);
         final onTrack = finish != null && !finish.isAfter(g.deadline);
         children.add(Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: SectionCard(
@@ -459,7 +611,7 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             statRow(t('extraTotal'), money(app.totalExtra(g)), bold: true),
-            statRow(t('buffer'), money(app.bufferTotal)),
+            statRow(t('buffer'), money(app.bufferBalance)),
             const SizedBox(height: 10),
             Text(t('extraGoesTo'), style: theme.textTheme.bodySmall),
             const SizedBox(height: 6),
@@ -479,14 +631,87 @@ class HomeScreen extends StatelessWidget {
       ));
     }
 
-    // Today's money in and out
+    // Loans to pay back
+    final loans = app.activeLoans();
+    if (loans.isNotEmpty) {
+      children.add(SectionCard(
+        title: t('loansTitle'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final l in loans) ...[
+              Text(tf('loanLine', {
+                'g': goalLabel(l.goalId),
+                'a': money(app.outstanding(l)),
+                'b': money(l.amount),
+              })),
+              const SizedBox(height: 6),
+              progressBar(1 - app.outstanding(l) / l.amount),
+              if (l.loanDays > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                    tf('loanPlan', {
+                      'a': moneyUp(l.amount / l.loanDays),
+                      'd': fmtDate(addDays(l.date, l.loanDays)),
+                    }),
+                    style: theme.textTheme.bodySmall),
+              ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () =>
+                      showLogSheet(context, kind: 'saving', goalId: l.goalId),
+                  child: Text(t('repayNow')),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ));
+    }
+
+    // Spending limits close to or over
+    final near = app.categoriesNearLimit();
+    if (near.isNotEmpty) {
+      children.add(SectionCard(
+        title: t('limitsTitle'),
+        color: cs.errorContainer,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final c in near)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  tf('limitStatusNamed', {
+                    'c': t('cat_$c'),
+                    'a': money(app.monthSpent(c)),
+                    'b': money(app.limits[c]!),
+                  }),
+                  style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+          ],
+        ),
+      ));
+    }
+
+    // Today's money
     children.add(SectionCard(
+      title: t('today'),
       child: Column(
         children: [
           statRow(t('savedToday'), money(app.totalOn('saving', today)),
               color: cs.primary, bold: true),
           statRow(t('spentToday'), money(app.totalOn('spending', today)),
               color: cs.error, bold: true),
+          if (app.totalOn('income', today) > 0)
+            statRow(t('incomeToday'), money(app.totalOn('income', today)),
+                color: cs.tertiary, bold: true),
+          if (app.totalOn('withdrawal', today) > 0)
+            statRow(t('withdrawnToday'),
+                money(app.totalOn('withdrawal', today)),
+                color: Colors.orange.shade800, bold: true),
         ],
       ),
     ));
@@ -549,6 +774,13 @@ class GoalsScreen extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: Text(app.mainGoal == null ? t('createGoal') : t('addMini')),
         ),
+        if (app.bufferBalance > 0) ...[
+          const SizedBox(height: 16),
+          SectionCard(
+            title: t('buffer'),
+            child: statRow(t('balance'), money(app.bufferBalance), bold: true),
+          ),
+        ],
         if (finished.isNotEmpty) ...[
           const SizedBox(height: 24),
           Text(t('completed'), style: theme.textTheme.titleMedium),
@@ -559,7 +791,7 @@ class GoalsScreen extends StatelessWidget {
               leading: const Icon(Icons.check_circle_outline),
               title: Text(g.name),
               subtitle: Text(
-                  '${money(app.savedFor(g.id))} ${t('of')} ${money(g.target)}'),
+                  '${money(app.balance(g.id))} ${t('of')} ${money(g.target)}'),
             ),
         ],
       ],
@@ -577,12 +809,13 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  String _mode = 'days';
+  String _mode = 'periods';
+  String _filter = 'all';
 
-  Widget _days(BuildContext context) {
+  Widget _periods(BuildContext context) {
     final g = app.mainGoal;
     if (g == null) return Center(child: Text(t('noMainGoal')));
-    final stats = app.dayStats(g).reversed.toList();
+    final stats = app.periodStats(g).reversed.toList();
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
       itemCount: stats.length,
@@ -591,7 +824,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         final s = stats[i];
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(fmtDate(s.day)),
+          title: Text(periodTitle(s, g)),
           subtitle: Text(
               '${t('target')}: ${num0(s.target.ceil())}   ${t('actual')}: ${num0(s.actual)}'),
           trailing: StatusChip(s.status),
@@ -601,28 +834,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _entries(BuildContext context) {
-    final list = app.sortedTxns;
-    if (list.isEmpty) return Center(child: Text(t('noEntries')));
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-      itemCount: list.length,
-      itemBuilder: (context, i) {
-        final x = list[i];
-        return Dismissible(
-          key: ValueKey(x.id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            color: Theme.of(context).colorScheme.error,
-            child: const Icon(Icons.delete, color: Colors.white),
+    var list = app.sortedTxns;
+    if (_filter != 'all') list = list.where((x) => x.kind == _filter).toList();
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              for (final f in ['all', 'saving', 'spending', 'withdrawal', 'income'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(t('filter_$f')),
+                    selected: _filter == f,
+                    onSelected: (_) => setState(() => _filter = f),
+                  ),
+                ),
+            ],
           ),
-          confirmDismiss: (_) =>
-              confirmDialog(context, t('deleteEntry'), okLabel: t('delete')),
-          onDismissed: (_) => app.deleteTxn(x.id),
-          child: TxnTile(x),
-        );
-      },
+        ),
+        Expanded(
+          child: list.isEmpty
+              ? Center(child: Text(t('noEntries')))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final x = list[i];
+                    return Dismissible(
+                      key: ValueKey(x.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: Theme.of(context).colorScheme.error,
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (_) => confirmDialog(
+                          context, t('deleteEntry'),
+                          okLabel: t('delete')),
+                      onDismissed: (_) => app.deleteTxn(x.id),
+                      child: TxnTile(x),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -636,7 +896,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             width: double.infinity,
             child: SegmentedButton<String>(
               segments: [
-                ButtonSegment(value: 'days', label: Text(t('days'))),
+                ButtonSegment(value: 'periods', label: Text(t('periodsTab'))),
                 ButtonSegment(value: 'entries', label: Text(t('entries'))),
               ],
               selected: {_mode},
@@ -644,306 +904,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ),
         ),
-        Expanded(child: _mode == 'days' ? _days(context) : _entries(context)),
+        Expanded(
+            child:
+                _mode == 'periods' ? _periods(context) : _entries(context)),
       ],
-    );
-  }
-}
-
-// ======================= Insights =======================
-
-class InsightsScreen extends StatelessWidget {
-  const InsightsScreen({super.key});
-
-  Widget _bar(double v, double maxV, Color c) {
-    final h = maxV <= 0 ? 2.0 : max(2.0, 110 * v / maxV);
-    return Container(
-      width: 10,
-      height: h,
-      decoration:
-          BoxDecoration(color: c, borderRadius: BorderRadius.circular(4)),
-    );
-  }
-
-  Widget _legend(Color c, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                  color: c, borderRadius: BorderRadius.circular(3))),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final today = dayOnly(DateTime.now());
-    final days = List<DateTime>.generate(7, (i) => addDays(today, i - 6));
-    final saved = days.map((d) => app.totalOn('saving', d)).toList();
-    final spent = days.map((d) => app.totalOn('spending', d)).toList();
-    var maxV = 0.0;
-    for (final v in [...saved, ...spent]) {
-      if (v > maxV) maxV = v;
-    }
-    final weekSaved = saved.fold<double>(0, (a, b) => a + b);
-    final weekSpent = spent.fold<double>(0, (a, b) => a + b);
-
-    final weekCats = app.spendingByCategory(days.first).entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final monthCats = app
-        .spendingByCategory(addDays(today, -29))
-        .entries
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final monthMax = monthCats.isEmpty ? 0.0 : monthCats.first.value;
-    final locs = app.savingsByLocation().entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final locTotal = locs.fold<double>(0, (a, b) => a + b.value);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      children: [
-        SectionCard(
-          title: '${t('savedVsSpent')} · ${t('thisWeek')}',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 140,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    for (var i = 0; i < 7; i++)
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                _bar(saved[i], maxV, cs.primary),
-                                const SizedBox(width: 3),
-                                _bar(spent[i], maxV, cs.error),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(weekdayShort(days[i].weekday),
-                                style: theme.textTheme.labelSmall),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(spacing: 16, children: [
-                _legend(cs.primary, t('legendSaved')),
-                _legend(cs.error, t('legendSpent')),
-              ]),
-              const SizedBox(height: 8),
-              statRow(t('legendSaved'), money(weekSaved),
-                  color: cs.primary, bold: true),
-              statRow(t('legendSpent'), money(weekSpent),
-                  color: cs.error, bold: true),
-            ],
-          ),
-        ),
-        SectionCard(
-          title: t('topSpending'),
-          child: weekCats.isEmpty
-              ? Text(t('nothingYet'))
-              : Row(
-                  children: [
-                    Icon(Icons.trending_up, color: cs.error),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(t('cat_${weekCats.first.key}'),
-                            style: theme.textTheme.titleMedium)),
-                    Text(money(weekCats.first.value),
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ],
-                ),
-        ),
-        SectionCard(
-          title: t('spendingByCat'),
-          child: monthCats.isEmpty
-              ? Text(t('nothingYet'))
-              : Column(
-                  children: [
-                    for (final e in monthCats)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              Expanded(child: Text(t('cat_${e.key}'))),
-                              Text(money(e.value)),
-                            ]),
-                            const SizedBox(height: 4),
-                            LinearProgressIndicator(
-                              value: monthMax <= 0 ? 0.0 : e.value / monthMax,
-                              minHeight: 6,
-                              color: cs.error,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-        SectionCard(
-          title: t('byLocation'),
-          child: locs.isEmpty
-              ? Text(t('nothingYet'))
-              : Column(
-                  children: [
-                    for (final e in locs) statRow(e.key, money(e.value)),
-                    const Divider(),
-                    statRow(t('total'), money(locTotal), bold: true),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// ======================= Settings =======================
-
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _name =
-      TextEditingController(text: app.userName);
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addLocation() async {
-    final v = await askText(context, t('addLocation'));
-    if (v != null) app.addLocation(v);
-  }
-
-  Future<void> _copyBackup() async {
-    final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: app.exportJson()));
-    messenger.showSnackBar(SnackBar(content: Text(t('backupCopied'))));
-  }
-
-  Future<void> _restore() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final v = await askText(context, t('pasteBackup'), maxLines: 6);
-    if (v == null || v.trim().isEmpty) return;
-    final ok = app.importJson(v);
-    if (ok) _name.text = app.userName;
-    messenger.showSnackBar(
-        SnackBar(content: Text(ok ? t('restored') : t('restoreFailed'))));
-  }
-
-  Future<void> _reset() async {
-    final ok =
-        await confirmDialog(context, t('resetConfirm'), okLabel: t('delete'));
-    if (!ok || !mounted) return;
-    Navigator.of(context).popUntil((r) => r.isFirst);
-    app.resetAll();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: app,
-      builder: (context, _) {
-        final theme = Theme.of(context);
-        final cs = theme.colorScheme;
-        Widget header(String s) => Padding(
-              padding: const EdgeInsets.only(top: 24, bottom: 8),
-              child: Text(s,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.primary, fontWeight: FontWeight.w700)),
-            );
-        return Scaffold(
-          appBar: AppBar(title: Text(t('settings'))),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              TextField(
-                controller: _name,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                    labelText: t('yourName'),
-                    border: const OutlineInputBorder()),
-                onChanged: app.setName,
-              ),
-              header(t('language')),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'sw', label: Text('Kiswahili')),
-                  ButtonSegment(value: 'en', label: Text('English')),
-                ],
-                selected: {app.lang},
-                onSelectionChanged: (s) => app.setLang(s.first),
-              ),
-              header(t('locations')),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  for (final l in app.locations)
-                    InputChip(
-                      label: Text(l),
-                      onDeleted: app.locations.length > 1
-                          ? () => app.removeLocation(l)
-                          : null,
-                    ),
-                  ActionChip(
-                    avatar: const Icon(Icons.add, size: 18),
-                    label: Text(t('addLocation')),
-                    onPressed: _addLocation,
-                  ),
-                ],
-              ),
-              header(t('backup')),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.copy_all_outlined),
-                title: Text(t('copyBackup')),
-                subtitle: Text(t('copyBackupSub')),
-                onTap: _copyBackup,
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.restore),
-                title: Text(t('restore')),
-                onTap: _restore,
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.delete_forever_outlined, color: cs.error),
-                title: Text(t('resetAll'), style: TextStyle(color: cs.error)),
-                onTap: _reset,
-              ),
-              header(t('about')),
-              const Text('Akiba 1.0'),
-            ],
-          ),
-        );
-      },
     );
   }
 }
