@@ -22,8 +22,11 @@ jobs:
         run: |
           flutter create --org com.akiba --project-name akiba --platforms android .
           rm -rf test
-          sed -i 's/android:label="akiba"/android:label="Akiba"/' android/app/src/main/AndroidManifest.xml
+      - name: Add Akiba's Android settings
+        run: python3 tool/patch_android.py
       - run: flutter pub get
+      - name: Make the app icon
+        run: dart run flutter_launcher_icons
       - run: flutter build apk --release
       - run: cp build/app/outputs/flutter-apk/app-release.apk Akiba.apk
       - uses: actions/upload-artifact@v4
