@@ -1,7 +1,7 @@
 name: akiba
 description: Akiba - savings tracker with goals, withdrawals, challenges and reports.
 publish_to: 'none'
-version: 2.0.0+2
+version: 4.0.0+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -17,6 +17,9 @@ dependencies:
   path_provider: ^2.1.4
   pdf: ^3.11.0
   printing: ^5.13.0
+  home_widget: '>=0.7.0 <1.0.0'
+  share_plus: '>=10.0.0 <11.0.0'
+  file_picker: '>=10.0.0 <11.0.0'
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.1
